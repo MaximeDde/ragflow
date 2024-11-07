@@ -1,0 +1,18 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo Se connecter à Amazon ECR...
+      - $(aws ecr get-login --no-include-email --region eu-west-2)
+      - REPOSITORY_URI=329072340489.dkr.ecr.eu-west-2.amazonaws.com/autoscript/ragnar
+  build:
+    commands:
+      - echo Construire l'image Docker...
+      - docker build -t $REPOSITORY_URI:latest .
+  post_build:
+    commands:
+      - echo Pousser l'image Docker vers ECR...
+      - docker push $REPOSITORY_URI:latest
+artifacts:
+  files: '**/*'
