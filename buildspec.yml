@@ -4,7 +4,7 @@ phases:
   pre_build:
     commands:
       - echo Se connecter à Amazon ECR...
-      - $(aws ecr get-login --no-include-email --region eu-west-2)
+      - aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 329072340489.dkr.ecr.eu-west-2.amazonaws.com
       - REPOSITORY_URI=329072340489.dkr.ecr.eu-west-2.amazonaws.com/autoscript/ragnar
   build:
     commands:
