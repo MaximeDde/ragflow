@@ -17,7 +17,7 @@ RUN --mount=type=cache,id=ragflow_base_apt,target=/var/cache/apt,sharing=locked 
 RUN sed -i 's|http://archive.ubuntu.com|https://mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/ubuntu.sources
 
 RUN --mount=type=cache,id=ragflow_base_apt,target=/var/cache/apt,sharing=locked \
-    apt update && apt install -y curl libpython3-dev nginx libglib2.0-0 libglx-mesa0 pkg-config libicu-dev libgdiplus default-jdk python3-pip pipx git wget \
+    apt update && apt install -y curl huggingface-hub nltk libpython3-dev nginx libglib2.0-0 libglx-mesa0 pkg-config libicu-dev libgdiplus default-jdk python3-pip pipx git wget \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
@@ -42,8 +42,6 @@ ENV POETRY_VIRTUALENVS_CREATE=true
 ENV POETRY_REQUESTS_TIMEOUT=15
 ENV POETRY_PYPI_MIRROR_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
 
-# Install huggingface-hub and nltk in the virtual environment
-RUN poetry run pip install huggingface-hub nltk
 
 # Copy and run download_deps.py using Poetry
 COPY download_deps.py ./
