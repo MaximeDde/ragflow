@@ -27,7 +27,7 @@ RUN pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple &&
     /root/.local/bin/poetry self add poetry-plugin-pypi-mirror
 
 # Add this line to install the packages via pip
-RUN pip3 install huggingface-hub nltk
+RUN pip3 install huggingface-hub nltk --break-system-packages
 
 # https://forum.aspose.com/t/aspose-slides-for-net-no-usable-version-of-libssl-found-with-linux-server/271344/13
 # aspose-slides on linux/arm64 is unavailable
