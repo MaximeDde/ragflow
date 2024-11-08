@@ -104,9 +104,14 @@ RUN --mount=type=bind,source=huggingface.co,target=/huggingface.co \
 # Copy nltk data downloaded via download_deps.py
 COPY nltk_data /root/nltk_data
 
-# https://github.com/chrismattmann/tika-python
-# This is the only way to run python-tika without internet access. Without this set, the default is to check the tika version and pull latest every time from Apache.
-COPY tika-server-standard-3.0.0.jar tika-server-standard-3.0.0.jar.md5 ./
+# Download Tika server JAR and its MD5 checksum
+RUN wget https://archive.apache.org/dist/tika/tika-server-3.0.0.jar -O tika-server-standard.jar \
+   && wget https://archive.apache.org/dist/tika/tika-server-3.0.0.jar.md5 -O tika-server-standard.jar.md5
+
+# Verify the MD5 checksum
+RUN md5sum -c tika-server-standard.jar.md5
+
+# Set the TIKA_SERVER_JAR environment variable
 ENV TIKA_SERVER_JAR="file:///ragflow/tika-server-standard.jar"
 
 # Copy compiled web pages
