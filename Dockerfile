@@ -17,12 +17,14 @@ RUN --mount=type=cache,id=ragflow_base_apt,target=/var/cache/apt,sharing=locked 
 RUN sed -i 's|http://archive.ubuntu.com|https://mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/ubuntu.sources
 
 RUN --mount=type=cache,id=ragflow_base_apt,target=/var/cache/apt,sharing=locked \
-    apt update && apt install -y curl libpython3-dev nginx libglib2.0-0 libglx-mesa0 pkg-config libicu-dev libgdiplus default-jdk python3-pip pipx \
+    apt update && apt install -y curl libpython3-dev nginx libglib2.0-0 libglx-mesa0 pkg-config libicu-dev libgdiplus default-jdk python3-pip pipx git wget \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && pip3 config set global.trusted-host "pypi.tuna.tsinghua.edu.cn mirrors.pku.edu.cn" && pip3 config set global.extra-index-url "https://mirrors.pku.edu.cn/pypi/web/simple" \
-    && pipx install poetry \
-    && /root/.local/bin/poetry self add poetry-plugin-pypi-mirror
+RUN pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
+    pip3 config set global.trusted-host "pypi.tuna.tsinghua.edu.cn mirrors.pku.edu.cn" && \
+    pip3 config set global.extra-index-url "https://mirrors.pku.edu.cn/pypi/web/simple" && \
+    pipx install poetry && \
+    /root/.local/bin/poetry self add poetry-plugin-pypi-mirror
 
 # https://forum.aspose.com/t/aspose-slides-for-net-no-usable-version-of-libssl-found-with-linux-server/271344/13
 # aspose-slides on linux/arm64 is unavailable
@@ -40,6 +42,13 @@ ENV POETRY_VIRTUALENVS_CREATE=true
 ENV POETRY_REQUESTS_TIMEOUT=15
 ENV POETRY_PYPI_MIRROR_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
 
+# Install huggingface-hub and nltk (required for download_deps.py)
+RUN pip3 install huggingface-hub nltk
+
+# Copy and Run download_deps.py
+COPY download_deps.py ./
+RUN python3 download_deps.py
+
 # builder stage
 FROM base AS builder
 USER root
@@ -55,18 +64,15 @@ COPY docs docs
 RUN --mount=type=cache,id=ragflow_builder_npm,target=/root/.npm,sharing=locked \
     cd web && npm i --force && npm run build
 
-# install dependencies from poetry.lock file
+# Install dependencies from poetry.lock file
 COPY pyproject.toml poetry.toml poetry.lock ./
-COPY download_deps.py ./
 
 RUN --mount=type=cache,id=ragflow_builder_poetry,target=/root/.cache/pypoetry,sharing=locked \
     if [ "$LIGHTEN" -eq 0 ]; then \
         poetry install --no-root --with=full; \
     else \
         poetry install --no-root; \
-    fi && \
-    # Run download_deps.py
-    poetry run python download_deps.py
+    fi
 
 # production stage
 FROM base AS production
@@ -89,27 +95,14 @@ COPY agent agent
 COPY graphrag graphrag
 COPY pyproject.toml poetry.toml poetry.lock ./
 
-# Copy models downloaded via download_deps.py
-RUN mkdir -p /ragflow/rag/res/deepdoc /root/.ragflow
-RUN --mount=type=bind,source=huggingface.co,target=/huggingface.co \
-    tar --exclude='.*' -cf - \
-        /huggingface.co/InfiniFlow/text_concat_xgb_v1.0 \
-        /huggingface.co/InfiniFlow/deepdoc \
-        | tar -xf - --strip-components=3 -C /ragflow/rag/res/deepdoc
-RUN --mount=type=bind,source=huggingface.co,target=/huggingface.co \
-    tar -cf - \
-        /huggingface.co/BAAI/bge-large-zh-v1.5 \
-        /huggingface.co/BAAI/bge-reranker-v2-m3 \
-        /huggingface.co/maidalun1020/bce-embedding-base_v1 \
-        /huggingface.co/maidalun1020/bce-reranker-base_v1 \
-        | tar -xf - --strip-components=2 -C /root/.ragflow
+# Copy the models and NLTK data downloaded via download_deps.py
+COPY --from=base /root/.cache/huggingface /root/.cache/huggingface
+COPY --from=base /root/nltk_data /root/nltk_data
+COPY --from=base /ragflow/rag/res/deepdoc /ragflow/rag/res/deepdoc
+COPY --from=base /root/.ragflow /root/.ragflow
 
-# Copy nltk data downloaded via download_deps.py
-COPY nltk_data /root/nltk_data
-
-# https://github.com/chrismattmann/tika-python
-# This is the only way to run python-tika without internet access. Without this set, the default is to check the tika version and pull latest every time from Apache.
-COPY tika-server-standard-3.0.0.jar tika-server-standard-3.0.0.jar.md5 ./
+# Copy Tika server JAR
+COPY --from=base /ragflow/tika-server-standard.jar /ragflow/
 ENV TIKA_SERVER_JAR="file:///ragflow/tika-server-standard.jar"
 
 # Copy compiled web pages
