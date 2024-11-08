@@ -1,13 +1,15 @@
 name: Build and Push Docker Image
 
+# Run workflow manually or on push to main branch
 on:
+  workflow_dispatch:
   push:
     branches: [ main ]
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -31,4 +33,9 @@ jobs:
         with:
           context: .
           push: true
-          tags: maximedde/ragflow:latest
+          tags: your-dockerhub-username/your-repo-name:latest
+          build-args: |
+            LIGHTEN=0
+          outputs: type=image,push=true
+
+    timeout-minutes: 360
