@@ -42,12 +42,12 @@ ENV POETRY_VIRTUALENVS_CREATE=true
 ENV POETRY_REQUESTS_TIMEOUT=15
 ENV POETRY_PYPI_MIRROR_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
 
-# Install huggingface-hub and nltk (required for download_deps.py)
-RUN pip3 install huggingface-hub nltk
+# Install huggingface-hub and nltk in the virtual environment
+RUN poetry run pip install huggingface-hub nltk
 
-# Copy and Run download_deps.py
+# Copy and run download_deps.py using Poetry
 COPY download_deps.py ./
-RUN python3 download_deps.py
+RUN poetry run python download_deps.py
 
 # builder stage
 FROM base AS builder
