@@ -71,12 +71,13 @@ USER root
 
 WORKDIR /ragflow
 
-# Install python packages' dependencies
-# cv2 requires libGL.so.1
+# Install necessary packages
 RUN --mount=type=cache,id=ragflow_production_apt,target=/var/cache/apt,sharing=locked \
-    apt update && apt install -y --no-install-recommends nginx libgl1 vim less && \
+    apt update && apt install -y --no-install-recommends \
+    nginx libgl1 vim less git wget && \
     rm -rf /var/lib/apt/lists/*
 
+# Copy application files
 COPY web web
 COPY api api
 COPY conf conf
@@ -85,46 +86,31 @@ COPY rag rag
 COPY agent agent
 COPY graphrag graphrag
 COPY pyproject.toml poetry.toml poetry.lock ./
+COPY docker/entrypoint.sh ./entrypoint.sh
 
-# Copy models downloaded via download_deps.py
-RUN mkdir -p /ragflow/rag/res/deepdoc /root/.ragflow
-RUN --mount=type=bind,source=huggingface.co,target=/huggingface.co \
-    tar --exclude='.*' -cf - \
-        /huggingface.co/InfiniFlow/text_concat_xgb_v1.0 \
-        /huggingface.co/InfiniFlow/deepdoc \
-        | tar -xf - --strip-components=3 -C /ragflow/rag/res/deepdoc
-RUN --mount=type=bind,source=huggingface.co,target=/huggingface.co \
-    tar -cf - \
-        /huggingface.co/BAAI/bge-large-zh-v1.5 \
-        /huggingface.co/BAAI/bge-reranker-v2-m3 \
-        /huggingface.co/maidalun1020/bce-embedding-base_v1 \
-        /huggingface.co/maidalun1020/bce-reranker-base_v1 \
-        | tar -xf - --strip-components=2 -C /root/.ragflow
+# Copy the download_deps.py script
+COPY download_deps.py .
 
-# Copy nltk data downloaded via download_deps.py
-COPY nltk_data /root/nltk_data
+# Install Python dependencies needed for download_deps.py
+ENV VIRTUAL_ENV=/ragflow/.venv
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
-# Download Tika server JAR and its MD5 checksum
-RUN wget https://archive.apache.org/dist/tika/tika-server-3.0.0.jar -O tika-server-standard.jar \
-   && wget https://archive.apache.org/dist/tika/tika-server-3.0.0.jar.md5 -O tika-server-standard.jar.md5
+# Install Python dependencies
+COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 
-# Verify the MD5 checksum
-RUN md5sum -c tika-server-standard.jar.md5
+# Run the download_deps.py script
+RUN python3 download_deps.py
 
 # Set the TIKA_SERVER_JAR environment variable
 ENV TIKA_SERVER_JAR="file:///ragflow/tika-server-standard.jar"
 
-# Copy compiled web pages
+# Copy nltk_data if it's required by the application
+COPY nltk_data /root/nltk_data
+
+# Copy compiled web pages from builder stage
 COPY --from=builder /ragflow/web/dist /ragflow/web/dist
 
-# Copy Python environment and packages
-ENV VIRTUAL_ENV=/ragflow/.venv
-COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
-ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
-
-ENV PYTHONPATH=/ragflow/
-
-COPY docker/entrypoint.sh ./entrypoint.sh
+# Set permissions and entrypoint
 RUN chmod +x ./entrypoint.sh
 
 ENTRYPOINT ["./entrypoint.sh"]
