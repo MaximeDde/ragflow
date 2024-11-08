@@ -17,14 +17,17 @@ RUN --mount=type=cache,id=ragflow_base_apt,target=/var/cache/apt,sharing=locked 
 RUN sed -i 's|http://archive.ubuntu.com|https://mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/ubuntu.sources
 
 RUN --mount=type=cache,id=ragflow_base_apt,target=/var/cache/apt,sharing=locked \
-    apt update && apt install -y curl huggingface-hub nltk libpython3-dev nginx libglib2.0-0 libglx-mesa0 pkg-config libicu-dev libgdiplus default-jdk python3-pip pipx git wget \
-    && rm -rf /var/lib/apt/lists/*
+   apt update && apt install -y curl libpython3-dev nginx libglib2.0-0 libglx-mesa0 pkg-config libicu-dev libgdiplus default-jdk python3-pip pipx git wget \
+   && rm -rf /var/lib/apt/lists/*
 
 RUN pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
     pip3 config set global.trusted-host "pypi.tuna.tsinghua.edu.cn mirrors.pku.edu.cn" && \
     pip3 config set global.extra-index-url "https://mirrors.pku.edu.cn/pypi/web/simple" && \
     pipx install poetry && \
     /root/.local/bin/poetry self add poetry-plugin-pypi-mirror
+
+# Add this line to install the packages via pip
+RUN pip3 install huggingface-hub nltk
 
 # https://forum.aspose.com/t/aspose-slides-for-net-no-usable-version-of-libssl-found-with-linux-server/271344/13
 # aspose-slides on linux/arm64 is unavailable
