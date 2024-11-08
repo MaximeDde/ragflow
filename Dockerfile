@@ -45,6 +45,8 @@ ENV POETRY_VIRTUALENVS_CREATE=true
 ENV POETRY_REQUESTS_TIMEOUT=15
 ENV POETRY_PYPI_MIRROR_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
 
+# Install dependencies needed for download_deps.py
+RUN poetry install --no-root --with download-deps
 
 # Copy and run download_deps.py using Poetry
 COPY download_deps.py ./
