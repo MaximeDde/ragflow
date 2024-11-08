@@ -57,13 +57,16 @@ RUN --mount=type=cache,id=ragflow_builder_npm,target=/root/.npm,sharing=locked \
 
 # install dependencies from poetry.lock file
 COPY pyproject.toml poetry.toml poetry.lock ./
+COPY download_deps.py ./
 
 RUN --mount=type=cache,id=ragflow_builder_poetry,target=/root/.cache/pypoetry,sharing=locked \
     if [ "$LIGHTEN" -eq 0 ]; then \
         poetry install --no-root --with=full; \
     else \
         poetry install --no-root; \
-    fi
+    fi && \
+    # Run download_deps.py
+    poetry run python download_deps.py
 
 # production stage
 FROM base AS production
@@ -71,13 +74,12 @@ USER root
 
 WORKDIR /ragflow
 
-# Install necessary packages
+# Install python packages' dependencies
+# cv2 requires libGL.so.1
 RUN --mount=type=cache,id=ragflow_production_apt,target=/var/cache/apt,sharing=locked \
-    apt update && apt install -y --no-install-recommends \
-    nginx libgl1 vim less git wget && \
+    apt update && apt install -y --no-install-recommends nginx libgl1 vim less && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy application files
 COPY web web
 COPY api api
 COPY conf conf
@@ -86,31 +88,41 @@ COPY rag rag
 COPY agent agent
 COPY graphrag graphrag
 COPY pyproject.toml poetry.toml poetry.lock ./
-COPY docker/entrypoint.sh ./entrypoint.sh
 
-# Copy the download_deps.py script
-COPY download_deps.py .
+# Copy models downloaded via download_deps.py
+RUN mkdir -p /ragflow/rag/res/deepdoc /root/.ragflow
+RUN --mount=type=bind,source=huggingface.co,target=/huggingface.co \
+    tar --exclude='.*' -cf - \
+        /huggingface.co/InfiniFlow/text_concat_xgb_v1.0 \
+        /huggingface.co/InfiniFlow/deepdoc \
+        | tar -xf - --strip-components=3 -C /ragflow/rag/res/deepdoc
+RUN --mount=type=bind,source=huggingface.co,target=/huggingface.co \
+    tar -cf - \
+        /huggingface.co/BAAI/bge-large-zh-v1.5 \
+        /huggingface.co/BAAI/bge-reranker-v2-m3 \
+        /huggingface.co/maidalun1020/bce-embedding-base_v1 \
+        /huggingface.co/maidalun1020/bce-reranker-base_v1 \
+        | tar -xf - --strip-components=2 -C /root/.ragflow
 
-# Install Python dependencies needed for download_deps.py
-ENV VIRTUAL_ENV=/ragflow/.venv
-ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
-
-# Install Python dependencies
-COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
-
-# Run the download_deps.py script
-RUN python3 download_deps.py
-
-# Set the TIKA_SERVER_JAR environment variable
-ENV TIKA_SERVER_JAR="file:///ragflow/tika-server-standard.jar"
-
-# Copy nltk_data if it's required by the application
+# Copy nltk data downloaded via download_deps.py
 COPY nltk_data /root/nltk_data
 
-# Copy compiled web pages from builder stage
+# https://github.com/chrismattmann/tika-python
+# This is the only way to run python-tika without internet access. Without this set, the default is to check the tika version and pull latest every time from Apache.
+COPY tika-server-standard-3.0.0.jar tika-server-standard-3.0.0.jar.md5 ./
+ENV TIKA_SERVER_JAR="file:///ragflow/tika-server-standard.jar"
+
+# Copy compiled web pages
 COPY --from=builder /ragflow/web/dist /ragflow/web/dist
 
-# Set permissions and entrypoint
+# Copy Python environment and packages
+ENV VIRTUAL_ENV=/ragflow/.venv
+COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
+
+ENV PYTHONPATH=/ragflow/
+
+COPY docker/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
 ENTRYPOINT ["./entrypoint.sh"]
